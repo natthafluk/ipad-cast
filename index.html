@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ส่งจอขึ้นเว็บ</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #fffdf8; --ink: #1d2433; --muted: #6b7280;
+    --line: #ddd6c8; --accent: #0f766e; --accent-ink: #fff; --warn: #b45309; --bad: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Sarabun", "Thonburi", "Leelawadee UI", system-ui, sans-serif;
+    font-size: 18px; line-height: 1.5; -webkit-text-size-adjust: 100%;
+  }
+  .screen { display: none; min-height: 100%; padding: 24px 16px; }
+  .screen.on { display: flex; flex-direction: column; align-items: center; }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 28px; margin: 8px 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  button {
+    font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 10px; padding: 12px 18px; min-height: 48px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.big { width: 100%; font-size: 20px; padding: 18px; margin-bottom: 12px; text-align: left; }
+  button.big small { display: block; font-weight: 400; opacity: .85; font-size: 15px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .back { background: none; border: none; color: var(--muted); padding: 4px 0; min-height: 0; }
+  .code { font-size: 64px; font-weight: 700; letter-spacing: 8px; font-variant-numeric: tabular-nums; text-align: center; margin: 4px 0; }
+  .status { font-size: 16px; color: var(--muted); text-align: center; }
+  .status.ok { color: var(--accent); } .status.warn { color: var(--warn); } .status.bad { color: var(--bad); }
+  .note { font-size: 15px; color: var(--warn); margin: -4px 0 12px; }
+  input.codein {
+    font: inherit; font-size: 40px; letter-spacing: 6px; text-align: center; width: 100%;
+    padding: 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* กระดาน */
+  #board { display: none; position: fixed; inset: 0; background: #2b2f3a; z-index: 10; flex-direction: column; }
+  #board.on { display: flex; }
+  #tools { display: flex; gap: 8px; padding: 8px; align-items: center; flex-wrap: wrap; background: #1d2433; color: #fff; }
+  #tools button { min-height: 44px; padding: 8px 14px; }
+  #tools .sw { width: 44px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
+  #tools .sw.sel, #tools button.sel { border-color: #facc15; }
+  #tools .sp { flex: 1; }
+  #tools .rc { font-variant-numeric: tabular-nums; font-size: 16px; }
+  #cvwrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 8px; }
+  #cv { background: #fff; max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; touch-action: none; border-radius: 4px; }
+  /* ฝั่งรับ */
+  #stage { display: none; position: fixed; inset: 0; background: #000; z-index: 10; }
+  #stage.on { display: block; }
+  #vid { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #vbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; opacity: .25; transition: opacity .2s; }
+  #vbar:hover, #vbar:focus-within { opacity: 1; }
+  #vmsg { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; color: #fff; font-size: 18px; text-shadow: 0 1px 4px #000; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<!-- หน้าแรก -->
+<section id="home" class="screen on">
+  <div class="wrap">
+    <h1>ส่งจอขึ้นเว็บ</h1>
+    <p class="sub">เปิดหน้านี้ทั้งสองเครื่อง แล้วเลือกหน้าที่ของแต่ละเครื่อง</p>
+    <button class="big primary" data-go="send">เครื่องนี้เป็นตัวส่ง<small>iPad ที่จะแชร์จอหรือเขียนกระดาน</small></button>
+    <button class="big" data-go="view">เครื่องนี้เป็นตัวรับ<small>คอมฯ ที่ต่อโปรเจกเตอร์ ใส่รหัสห้องเพื่อดู</small></button>
+  </div>
+</section>
+
+<!-- ตัวส่ง -->
+<section id="send" class="screen">
+  <div class="wrap">
+    <button class="back" data-go="home">‹ กลับ</button>
+    <div class="card">
+      <div class="status">รหัสห้อง (พิมพ์รหัสนี้ที่เครื่องรับ)</div>
+      <div class="code" id="code">······</div>
+      <div class="status" id="sstat">กำลังเชื่อมต่อ…</div>
+    </div>
+    <button class="big primary" id="bScreen">แชร์ทั้งหน้าจอ<small>ทุกแอปบนเครื่องนี้</small></button>
+    <div class="note" id="noScreen" hidden>เครื่องนี้ยังแชร์ทั้งหน้าจอไม่ได้ (iPad ต้องเป็น iPadOS 27 ขึ้นไป) ใช้กระดานแทนได้</div>
+    <button class="big" id="bBoard">เขียนกระดานไวท์บอร์ด<small>ใช้ได้ทุกรุ่น ส่งเฉพาะกระดานในหน้านี้</small></button>
+    <button class="big" id="bStop" hidden>หยุดแชร์หน้าจอ</button>
+  </div>
+</section>
+
+<!-- กระดาน -->
+<div id="board">
+  <div id="tools">
+    <button class="sw sel" data-c="#111827" style="background:#111827" aria-label="ดำ"></button>
+    <button class="sw" data-c="#dc2626" style="background:#dc2626" aria-label="แดง"></button>
+    <button class="sw" data-c="#2563eb" style="background:#2563eb" aria-label="น้ำเงิน"></button>
+    <button class="sw" data-c="#16a34a" style="background:#16a34a" aria-label="เขียว"></button>
+    <button id="bEraser">ยางลบ</button>
+    <button id="bUndo">ย้อน</button>
+    <button id="bClear">ล้าง</button>
+    <span class="sp"></span>
+    <span class="rc" id="bInfo"></span>
+    <button id="bClose">ปิดกระดาน</button>
+  </div>
+  <div id="cvwrap"><canvas id="cv" width="1920" height="1080"></canvas></div>
+</div>
+
+<!-- ตัวรับ -->
+<section id="view" class="screen">
+  <div class="wrap">
+    <button class="back" data-go="home">‹ กลับ</button>
+    <h1>ใส่รหัสห้อง</h1>
+    <p class="sub">ดูรหัส 6 หลักจากหน้าจอเครื่องส่ง</p>
+    <input class="codein" id="vin" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="off">
+    <button class="big primary" id="bJoin" style="text-align:center">เริ่มดู</button>
+    <div class="status" id="vstat"></div>
+  </div>
+</section>
+<div id="stage">
+  <video id="vid" autoplay playsinline muted></video>
+  <div id="vbar">
+    <button id="bFull">เต็มจอ</button>
+    <button id="bLeave">ออก</button>
+  </div>
+  <div id="vmsg"></div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var PREFIX = 'ipadcast-';
+  var $ = function (id) { return document.getElementById(id); };
+  function store(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) { return null; } }
+
+  // ---------- สลับหน้า ----------
+  var mode = 'home';
+  function go(m) {
+    if (mode === 'send' && m !== 'send') stopSender();
+    if (mode === 'view' && m !== 'view') leaveView();
+    mode = m;
+    ['home', 'send', 'view'].forEach(function (s) { $(s).classList.toggle('on', s === m); });
+    if (location.hash !== '#' + m) history.replaceState(null, '', m === 'home' ? location.pathname + location.search : '#' + m);
+    if (m === 'send') startSender();
+    if (m === 'view') { $('vin').focus(); }
+  }
+  document.querySelectorAll('[data-go]').forEach(function (b) {
+    b.addEventListener('click', function () { go(b.dataset.go); });
+  });
+
+  function setStat(el, text, cls) { el.textContent = text; el.className = 'status' + (cls ? ' ' + cls : ''); }
+
+  // ================= ตัวส่ง =================
+  var sPeer = null, sStream = null, sKind = null, viewers = {}, wake = null;
+  var canScreen = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+  function newCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+
+  function startSender() {
+    $('bScreen').disabled = !canScreen;
+    $('noScreen').hidden = canScreen;
+    if (sPeer) return;
+    var code = store('code') || newCode();
+    openSenderPeer(code);
+  }
+  function openSenderPeer(code) {
+    setStat($('sstat'), 'กำลังเชื่อมต่อ…');
+    sPeer = new Peer(PREFIX + code);
+    sPeer.on('open', function () { store('code', code); $('code').textContent = code; refreshSenderStat(); });
+    sPeer.on('connection', function (conn) {
+      conn.on('open', function () {
+        viewers[conn.peer] = { conn: conn, call: null };
+        callViewer(conn.peer); refreshSenderStat();
+      });
+      var gone = function () {
+        var v = viewers[conn.peer]; if (!v) return;
+        if (v.call) v.call.close();
+        delete viewers[conn.peer]; refreshSenderStat();
+      };
+      conn.on('close', gone); conn.on('error', gone);
+    });
+    sPeer.on('disconnected', function () {
+      setStat($('sstat'), 'หลุดจากเซิร์ฟเวอร์จับคู่ กำลังต่อใหม่…', 'warn');
+      setTimeout(function () { if (sPeer && !sPeer.destroyed) sPeer.reconnect(); }, 2000);
+    });
+    sPeer.on('error', function (err) {
+      if (err.type === 'unavailable-id') { sPeer.destroy(); sPeer = null; openSenderPeer(newCode()); return; }
+      if (err.type === 'peer-unavailable') return;
+      setStat($('sstat'), 'เชื่อมต่อไม่ได้ (' + err.type + ') ตรวจอินเทอร์เน็ตแล้วโหลดหน้าใหม่', 'bad');
+    });
+  }
+  function refreshSenderStat() {
+    if (!sPeer || !sPeer.open) return;
+    var n = Object.keys(viewers).length;
+    var what = sKind === 'screen' ? 'กำลังแชร์ทั้งหน้าจอ' : sKind === 'board' ? 'กำลังส่งกระดาน' : 'ยังไม่ได้ส่งภาพ';
+    var txt = what + ' · เครื่องรับ ' + n + ' เครื่อง';
+    setStat($('sstat'), txt, sKind ? 'ok' : '');
+    $('bInfo').textContent = 'ห้อง ' + (store('code') || '') + ' · รับ ' + n;
+  }
+  function callViewer(id) {
+    var v = viewers[id]; if (!v) return;
+    if (v.call) { v.call.close(); v.call = null; }
+    if (!sStream) { try { v.conn.send({ t: 'idle' }); } catch (e) {} return; }
+    v.call = sPeer.call(id, sStream);
+  }
+  function setStream(stream, kind) {
+    if (sStream && sStream !== stream && sKind === 'screen') sStream.getTracks().forEach(function (t) { t.stop(); });
+    sStream = stream; sKind = stream ? kind : null;
+    // บอกตัวเข้ารหัสให้เน้นความคมของตัวหนังสือมากกว่าความลื่น
+    if (stream) stream.getVideoTracks().forEach(function (t) { try { t.contentHint = 'detail'; } catch (e) {} });
+    Object.keys(viewers).forEach(callViewer);
+    $('bStop').hidden = sKind !== 'screen';
+    refreshSenderStat(); keepAwake(!!stream);
+  }
+  function keepAwake(on) {
+    if (!('wakeLock' in navigator)) return;
+    if (on && !wake) navigator.wakeLock.request('screen').then(function (w) { wake = w; w.addEventListener('release', function () { wake = null; }); }).catch(function () {});
+    if (!on && wake) { wake.release(); wake = null; }
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && sStream) keepAwake(true); });
+
+  $('bScreen').addEventListener('click', function () {
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }).then(function (stream) {
+      closeBoard(false);
+      stream.getVideoTracks()[0].addEventListener('ended', function () { if (sStream === stream) setStream(null); });
+      setStream(stream, 'screen');
+    }).catch(function (err) {
+      if (err && err.name === 'NotAllowedError') return;
+      setStat($('sstat'), 'แชร์หน้าจอไม่สำเร็จ: ' + (err && err.name || err), 'bad');
+    });
+  });
+  $('bStop').addEventListener('click', function () { setStream(null); });
+
+  function stopSender() {
+    closeBoard(false); setStream(null);
+    if (sPeer) { sPeer.destroy(); sPeer = null; }
+    viewers = {}; $('code').textContent = '······';
+  }
+
+  // ---------- กระดาน ----------
+  var cv = $('cv'), ctx = cv.getContext('2d'), strokes = [], cur = null, color = '#111827', erasing = false, boardStream = null, tick = null, flip = 0;
+
+  function redraw() {
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    strokes.forEach(drawStroke); if (cur) drawStroke(cur);
+  }
+  function drawStroke(s) {
+    ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    var p = s.p;
+    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], s.w / 2, 0, 6.2832); ctx.fill(); return; }
+    ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]);
+    for (var i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
+    ctx.stroke();
+  }
+  function pos(e) {
+    var r = cv.getBoundingClientRect();
+    return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height];
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    cur = { c: erasing ? '#fff' : color, w: erasing ? 60 : 6, p: [pos(e)] }; redraw();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!cur) return; e.preventDefault();
+    var ev = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    if (!ev.length) ev = [e];
+    ev.forEach(function (x) { cur.p.push(pos(x)); }); redraw();
+  });
+  function endStroke() { if (!cur) return; strokes.push(cur); cur = null; redraw(); }
+  cv.addEventListener('pointerup', endStroke); cv.addEventListener('pointercancel', endStroke);
+
+  document.querySelectorAll('#tools .sw').forEach(function (b) {
+    b.addEventListener('click', function () {
+      color = b.dataset.c; erasing = false;
+      document.querySelectorAll('#tools .sel').forEach(function (x) { x.classList.remove('sel'); });
+      b.classList.add('sel');
+    });
+  });
+  $('bEraser').addEventListener('click', function () {
+    erasing = true;
+    document.querySelectorAll('#tools .sel').forEach(function (x) { x.classList.remove('sel'); });
+    $('bEraser').classList.add('sel');
+  });
+  $('bUndo').addEventListener('click', function () { strokes.pop(); redraw(); });
+  $('bClear').addEventListener('click', function () {
+    if (strokes.length && confirm('ล้างกระดานทั้งหมด?')) { strokes = []; redraw(); }
+  });
+  $('bClose').addEventListener('click', function () { closeBoard(true); });
+
+  $('bBoard').addEventListener('click', function () {
+    if (!cv.captureStream) { setStat($('sstat'), 'เบราว์เซอร์นี้ส่งภาพกระดานไม่ได้', 'bad'); return; }
+    $('board').classList.add('on'); redraw();
+    if (!boardStream) boardStream = cv.captureStream(30);
+    // วาดจุดมุมจอสลับสีเล็กน้อยเป็นระยะ เพื่อให้มีเฟรมส่งถึงเครื่องรับที่เพิ่งเข้ามา
+    if (!tick) tick = setInterval(function () {
+      flip ^= 1; ctx.fillStyle = flip ? '#ffffff' : '#fefefe'; ctx.fillRect(0, 0, 2, 2);
+    }, 500);
+    setStream(boardStream, 'board');
+  });
+  function closeBoard(clearStream) {
+    $('board').classList.remove('on');
+    if (tick) { clearInterval(tick); tick = null; }
+    if (clearStream && sKind === 'board') setStream(null);
+  }
+
+  // ================= ตัวรับ =================
+  var vPeer = null, vConn = null, vRoom = null, vRetry = null, vGot = false;
+
+  $('vin').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 6); });
+  $('vin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('bJoin').click(); });
+  $('bJoin').addEventListener('click', function () {
+    var code = $('vin').value;
+    if (code.length !== 6) { setStat($('vstat'), 'รหัสห้องต้องมี 6 หลัก', 'bad'); return; }
+    joinRoom(code);
+  });
+  function vMsg(t) { $('vmsg').textContent = t; setStat($('vstat'), t); }
+
+  function joinRoom(code) {
+    leaveView(); vRoom = code;
+    $('stage').classList.add('on'); vMsg('กำลังเชื่อมต่อห้อง ' + code + '…');
+    vPeer = new Peer();
+    vPeer.on('open', connectToSender);
+    vPeer.on('call', function (call) {
+      call.answer();
+      call.on('stream', function (stream) {
+        vGot = true; $('vid').srcObject = stream;
+        var p = $('vid').play(); if (p && p.catch) p.catch(function () {});
+        $('vmsg').textContent = '';
+      });
+      call.on('close', function () { if (vConn && vConn.open) { $('vid').srcObject = null; vMsg('เครื่องส่งหยุดส่งภาพ รออยู่…'); } });
+    });
+    vPeer.on('disconnected', function () { setTimeout(function () { if (vPeer && !vPeer.destroyed) vPeer.reconnect(); }, 2000); });
+    vPeer.on('error', function (err) {
+      if (err.type === 'peer-unavailable') { vMsg('ยังไม่พบห้อง ' + vRoom + ' ตรวจรหัส แล้วรอสักครู่…'); retrySoon(); return; }
+      vMsg('เชื่อมต่อไม่ได้ (' + err.type + ') กำลังลองใหม่…'); retrySoon();
+    });
+  }
+  function connectToSender() {
+    if (!vPeer || vPeer.destroyed || !vRoom) return;
+    if (vConn) { try { vConn.close(); } catch (e) {} }
+    var conn = vConn = vPeer.connect(PREFIX + vRoom, { reliable: true });
+    conn.on('open', function () { if (!vGot) vMsg('เข้าห้องแล้ว รอเครื่องส่งเริ่มส่งภาพ…'); });
+    conn.on('data', function (d) { if (d && d.t === 'idle') { $('vid').srcObject = null; vMsg('เข้าห้องแล้ว รอเครื่องส่งเริ่มส่งภาพ…'); } });
+    conn.on('close', function () {
+      if (vConn !== conn) return;
+      vGot = false; $('vid').srcObject = null; vMsg('เครื่องส่งหลุด กำลังต่อใหม่…'); retrySoon();
+    });
+  }
+  function retrySoon() {
+    clearTimeout(vRetry);
+    vRetry = setTimeout(function () {
+      if (!vPeer || vPeer.destroyed) return;
+      if (vPeer.disconnected) vPeer.reconnect(); else connectToSender();
+    }, 3000);
+  }
+  function leaveView() {
+    clearTimeout(vRetry); vRoom = null; vGot = false; vConn = null;
+    if (vPeer) { vPeer.destroy(); vPeer = null; }
+    $('vid').srcObject = null; $('stage').classList.remove('on'); $('vmsg').textContent = '';
+    if (document.fullscreenElement) document.exitFullscreen();
+  }
+  $('bLeave').addEventListener('click', function () { leaveView(); setStat($('vstat'), ''); });
+  function toggleFull() {
+    var el = $('stage');
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  }
+  $('bFull').addEventListener('click', toggleFull);
+  $('vid').addEventListener('dblclick', toggleFull);
+
+  // ---------- เริ่ม ----------
+  window.addEventListener('pagehide', function () { if (sPeer) sPeer.destroy(); if (vPeer) vPeer.destroy(); });
+  function fromHash() {
+    var h = location.hash.replace('#', '');
+    if (h !== 'send' && h !== 'view') h = 'home';
+    if (h !== mode) go(h);
+  }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+})();
+</script>
+</body>
+</html>
