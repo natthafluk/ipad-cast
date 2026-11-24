@@ -54,6 +54,7 @@
   /* ฝั่งรับ */
   #stage { display: none; position: fixed; inset: 0; background: #000; z-index: 10; overflow: hidden; }
   #stage.on { display: block; }
+  #vbox { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
   #vid { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #000; }
   #vbar { align-items: center; z-index: 2; }
   #cropv { color: #fff; font-size: 15px; min-width: 96px; text-align: center; text-shadow: 0 1px 3px #000; }
@@ -119,8 +120,9 @@
   </div>
 </section>
 <div id="stage">
-  <video id="vid" autoplay playsinline muted></video>
+  <div id="vbox"><video id="vid" autoplay playsinline muted></video></div>
   <div id="vbar">
+    <button id="bRot">หมุนภาพ</button>
     <button id="bCropM" aria-label="ตัดขอบบนน้อยลง">−</button>
     <span id="cropv">ตัดขอบบน 0%</span>
     <button id="bCropP" aria-label="ตัดขอบบนมากขึ้น">+</button>
@@ -374,18 +376,29 @@
   // ---------- ตัดขอบบน (ซ่อนแถบเวลา/แบตเตอรี่ของ iPad) ----------
   var crop = 0;
   try { crop = Math.min(20, Math.max(0, parseFloat(localStorage.getItem('cropTop')) || 0)); } catch (e) {}
+  var rot = 0;
+  try { rot = (parseInt(localStorage.getItem('rot'), 10) || 0) % 360; if (rot % 90) rot = 0; } catch (e) {}
   function layoutVideo() {
-    var v = $('vid'), W = $('stage').clientWidth, H = $('stage').clientHeight;
+    var v = $('vid'), box = $('vbox'), W = $('stage').clientWidth, H = $('stage').clientHeight;
     $('cropv').textContent = 'ตัดขอบบน ' + crop + '%';
-    if (!v.videoWidth || !W || !H) { v.style.cssText = ''; return; }
-    var t = crop / 100, keepH = v.videoHeight * (1 - t);
-    var s = Math.min(W / v.videoWidth, H / keepH);
+    if (!v.videoWidth || !W || !H) { v.style.cssText = ''; box.style.cssText = ''; return; }
+    // ขนาดภาพหลังหมุน (dw x dh) แล้วตัดขอบบนของภาพที่หมุนแล้ว
+    var side = rot % 180 !== 0, dw = side ? v.videoHeight : v.videoWidth, dh = side ? v.videoWidth : v.videoHeight;
+    var t = crop / 100, keepH = dh * (1 - t);
+    var s = Math.min(W / dw, H / keepH);
+    box.style.width = dw * s + 'px'; box.style.height = keepH * s + 'px';
+    box.style.left = (W - dw * s) / 2 + 'px'; box.style.top = (H - keepH * s) / 2 + 'px';
     var w = v.videoWidth * s, h = v.videoHeight * s;
     v.style.width = w + 'px'; v.style.height = h + 'px';
-    v.style.left = (W - w) / 2 + 'px';
-    v.style.top = ((H - keepH * s) / 2 - t * h) + 'px';
-    v.style.clipPath = 'inset(' + crop + '% 0 0 0)';
+    v.style.left = (dw * s - w) / 2 + 'px';
+    v.style.top = (-t * dh * s + (dh * s - h) / 2) + 'px';
+    v.style.transform = 'rotate(' + rot + 'deg)';
   }
+  $('bRot').addEventListener('click', function () {
+    rot = (rot + 90) % 360;
+    try { localStorage.setItem('rot', String(rot)); } catch (e) {}
+    layoutVideo();
+  });
   function setCrop(d) {
     crop = Math.min(20, Math.max(0, Math.round((crop + d) * 2) / 2));
     try { localStorage.setItem('cropTop', String(crop)); } catch (e) {}
